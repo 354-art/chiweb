@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-TW" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDGs 記憶配對遊戲</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    * {
+      font-family: 'Noto Sans TC', sans-serif;
+    }
+    .card {
+      perspective: 1000px;
+      cursor: pointer;
+    }
+    .card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.5s;
+      transform-style: preserve-3d;
+    }
+    .card.flipped .card-inner {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      text-align: center;
+    }
+    .card-front {
+      transform: rotateY(180deg);
+    }
+    .card.matched {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    .card.matched .card-inner {
+      transform: rotateY(180deg);
+    }
+    @keyframes celebrate {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .celebrate {
+      animation: celebrate 0.5s ease-in-out;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .slide-in {
+      animation: slideIn 0.6s ease-out forwards;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full overflow-auto" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);">
+   <div class="min-h-full w-full p-4 md:p-8"><!-- Header -->
+    <div class="text-center mb-6 slide-in">
+     <h1 id="game-title" class="text-3xl md:text-4xl font-black text-white mb-2" style="text-shadow: 0 0 30px rgba(0, 255, 136, 0.5);">🌍 SDGs 記憶配對遊戲</h1>
+     <p class="text-gray-300 text-sm md:text-base">配對 SDGs 指標與主題，測試你的永續發展知識！</p>
+    </div><!-- Score Panel -->
+    <div class="flex justify-center items-center gap-3 md:gap-6 mb-6 flex-wrap">
+     <div class="bg-gradient-to-r from-emerald-500 to-teal-500 px-4 md:px-6 py-3 rounded-full shadow-lg"><span id="score-label" class="text-white font-bold text-sm md:text-base">目前分數：</span> <span id="score" class="text-white font-black text-xl md:text-2xl">0</span> <span class="text-white font-bold text-sm md:text-base"> 分</span>
+     </div>
+     <div class="bg-gradient-to-r from-purple-500 to-pink-500 px-4 md:px-6 py-3 rounded-full shadow-lg"><span class="text-white font-bold text-sm md:text-base">本輪配對：</span> <span id="matches" class="text-white font-black text-xl md:text-2xl">0</span> <span class="text-white font-bold text-sm md:text-base"> / </span> <span id="total-pairs" class="text-white font-black text-xl md:text-2xl">5</span>
+     </div>
+     <div class="bg-gradient-to-r from-orange-500 to-red-500 px-4 md:px-6 py-3 rounded-full shadow-lg"><span class="text-white font-bold text-sm md:text-base">關卡：</span> <span id="level" class="text-white font-black text-xl md:text-2xl">1</span> <span class="text-white font-bold text-sm md:text-base"> / 13</span>
+     </div>
+    </div><!-- Game Board -->
+    <div id="game-board" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 md:gap-4 max-w-4xl mx-auto mb-6"><!-- Cards will be generated here -->
+    </div><!-- Level Complete Panel -->
+    <div id="level-complete-panel" class="hidden text-center mb-6">
+     <div class="bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 p-1 rounded-2xl max-w-md mx-auto">
+      <div class="bg-gray-900 rounded-xl p-6">
+       <div class="text-5xl mb-3">
+        🎊
+       </div>
+       <h2 class="text-xl font-black text-white mb-2">關卡完成！</h2>
+       <p class="text-gray-300 text-sm mb-3">準備挑戰更多 SDGs 指標...</p>
+       <div class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">
+        進入下一關！
+       </div>
+      </div>
+     </div>
+    </div><!-- Result Panel -->
+    <div id="result-panel" class="hidden text-center">
+     <div class="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 p-1 rounded-2xl max-w-md mx-auto mb-6">
+      <div class="bg-gray-900 rounded-xl p-6">
+       <div class="text-6xl mb-4">
+        🏆
+       </div>
+       <h2 class="text-3xl font-black text-white mb-2">完美通關！</h2>
+       <p class="text-gray-300 mb-4">你已成功配對所有 17 個 SDGs 指標！</p>
+       <div class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400 mb-4">
+        總分：<span id="final-score">100</span> 分
+       </div>
+       <p class="text-gray-400 text-sm mb-4">你已經掌握了永續發展目標！</p><!-- Student Form -->
+       <div id="student-form" class="mt-6 space-y-4">
+        <div class="bg-gray-800 p-4 rounded-lg">
+         <h3 class="text-white font-bold mb-3 text-lg">📝 提交成績</h3>
+         <div class="space-y-3">
+          <div class="text-left"><label for="class-name-input" class="block text-white text-sm font-medium mb-1">班級</label> <input type="text" id="class-name-input" placeholder="例如：501" class="w-full px-4 py-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-emerald-500 focus:outline-none">
+          </div>
+          <div class="text-left"><label for="seat-number-input" class="block text-white text-sm font-medium mb-1">座號</label> <input type="text" id="seat-number-input" placeholder="例如：15" class="w-full px-4 py-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-emerald-500 focus:outline-none">
+          </div>
+          <div class="text-left"><label for="student-name-input" class="block text-white text-sm font-medium mb-1">姓名</label> <input type="text" id="student-name-input" placeholder="請輸入你的姓名" class="w-full px-4 py-2 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-emerald-500 focus:outline-none">
+          </div><button id="submit-score-btn" onclick="submitScore()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105"> 📝 提交成績 </button>
+          <p id="submit-message" class="hidden text-emerald-400 font-medium text-sm"></p>
+          <p id="submit-error" class="hidden text-red-400 font-medium text-sm"></p>
+         </div>
+        </div>
+       </div>
+      </div>
+     </div>
+    </div><!-- Restart Button -->
+    <div class="text-center"><button id="restart-btn" onclick="restartGame()" class="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-all duration-300"> 🔄 重新開始 </button>
+    </div><!-- SDGs Info -->
+    <div class="mt-8 text-center text-gray-400 text-xs max-w-2xl mx-auto">
+     <p>📚 資料來源：聯合國永續發展目標 (SDGs)</p>
+    </div>
+   </div>
+  </div>
+  <script>
+    // All SDGs data from the source
+    const allSDGsData = [
+      { id: 1, indicator: "SDG 1", theme: "消除貧窮", color: "#E5243B" },
+      { id: 2, indicator: "SDG 2", theme: "消除飢餓", color: "#DDA63A" },
+      { id: 3, indicator: "SDG 3", theme: "健康與福祉", color: "#4C9F38" },
+      { id: 4, indicator: "SDG 4", theme: "優質教育", color: "#C5192D" },
+      { id: 5, indicator: "SDG 5", theme: "性別平等", color: "#FF3A21" },
+      { id: 6, indicator: "SDG 6", theme: "淨水與衛生", color: "#26BDE2" },
+      { id: 7, indicator: "SDG 7", theme: "可負擔能源", color: "#FCC30B" },
+      { id: 8, indicator: "SDG 8", theme: "就業與經濟成長", color: "#A21942" },
+      { id: 9, indicator: "SDG 9", theme: "工業與基礎建設", color: "#FD6925" },
+      { id: 10, indicator: "SDG 10", theme: "減少不平等", color: "#DD1367" },
+      { id: 11, indicator: "SDG 11", theme: "永續城市", color: "#FD9D24" },
+      { id: 12, indicator: "SDG 12", theme: "責任消費與生產", color: "#BF8B2E" },
+      { id: 13, indicator: "SDG 13", theme: "氣候行動", color: "#3F7E44" },
+      { id: 14, indicator: "SDG 14", theme: "海洋生態", color: "#0A97D9" },
+      { id: 15, indicator: "SDG 15", theme: "陸地生態", color: "#56C02B" },
+      { id: 16, indicator: "SDG 16", theme: "和平與正義", color: "#00689D" },
+      { id: 17, indicator: "SDG 17", theme: "全球夥伴", color: "#19486A" }
+    ];
+
+    // Game state
+    let currentSDGs = [];
+    let usedSDGs = [];
+    let cards = [];
+    let flippedCards = [];
+    let matchedPairs = 0;
+    let score = 0;
+    let isLocked = false;
+    let currentLevel = 1;
+    let currentPairCount = 5;
+    let gameStartTime = null;
+    let totalMatchesCount = 0;
+
+    const defaultConfig = {
+      game_title: "🌍 SDGs 記憶配對遊戲",
+      score_label: "目前分數：",
+      background_color: "#1a1a2e",
+      card_color: "#0f3460",
+      text_color: "#ffffff",
+      accent_color: "#00ff88",
+      button_color: "#0891b2"
+    };
+
+    let config = { ...defaultConfig };
+
+    // Shuffle array
+    function shuffleArray(array) {
+      const newArray = [...array];
+      for (let i = newArray.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+      }
+      return newArray;
+    }
+
+    // Select random SDGs based on current level
+    function selectRandomSDGs(count) {
+      const availableSDGs = allSDGsData.filter(sdg => !usedSDGs.includes(sdg.id));
+      
+      if (availableSDGs.length === 0) {
+        return [];
+      }
+      
+      const numToSelect = Math.min(count, availableSDGs.length);
+      const shuffled = shuffleArray(availableSDGs);
+      const selected = shuffled.slice(0, numToSelect);
+      
+      selected.forEach(sdg => usedSDGs.push(sdg.id));
+      
+      return selected;
+    }
+
+    // Create cards from SDGs
+    function createCards(sdgs) {
+      const cardPairs = [];
+      sdgs.forEach((sdg, index) => {
+        cardPairs.push({
+          id: `indicator-${index}`,
+          pairId: index,
+          content: sdg.indicator,
+          type: "indicator",
+          color: sdg.color
+        });
+        cardPairs.push({
+          id: `theme-${index}`,
+          pairId: index,
+          content: sdg.theme,
+          type: "theme",
+          color: sdg.color
+        });
+      });
+      return shuffleArray(cardPairs);
+    }
+
+    // Render game board
+    function renderGameBoard() {
+      const board = document.getElementById("game-board");
+      board.innerHTML = "";
+
+      cards.forEach((card, index) => {
+        const cardElement = document.createElement("div");
+        cardElement.className = "card aspect-square flipped";
+        cardElement.dataset.index = index;
+        cardElement.innerHTML = `
+          <div class="card-inner">
+            <div class="card-back" style="background: linear-gradient(145deg, ${config.card_color}, #1a1a3e); border: 2px solid ${config.accent_color}40;">
+              <span class="text-4xl">❓</span>
+            </div>
+            <div class="card-front" style="background: linear-gradient(145deg, ${card.color}, ${card.color}dd); border: 2px solid ${card.color};">
+              <span class="text-white font-bold text-sm md:text-base leading-tight">${card.content}</span>
+            </div>
+          </div>
+        `;
+        cardElement.addEventListener("click", () => flipCard(index));
+        board.appendChild(cardElement);
+      });
+
+      // Show preview for 3 seconds
+      showPreview();
+    }
+
+    // Show cards preview for 3 seconds
+    function showPreview() {
+      isLocked = true;
+      
+      setTimeout(() => {
+        const allCards = document.querySelectorAll(".card");
+        allCards.forEach(card => {
+          card.classList.remove("flipped");
+        });
+        isLocked = false;
+      }, 3000);
+    }
+
+    // Flip card
+    function flipCard(index) {
+      if (isLocked) return;
+      
+      const cardElement = document.querySelectorAll(".card")[index];
+      const card = cards[index];
+
+      if (cardElement.classList.contains("flipped") || cardElement.classList.contains("matched")) {
+        return;
+      }
+
+      cardElement.classList.add("flipped");
+      flippedCards.push({ index, card, element: cardElement });
+
+      if (flippedCards.length === 2) {
+        isLocked = true;
+        checkMatch();
+      }
+    }
+
+    // Check if cards match
+    function checkMatch() {
+      const [first, second] = flippedCards;
+
+      if (first.card.pairId === second.card.pairId && first.card.type !== second.card.type) {
+        // Match!
+        setTimeout(() => {
+          first.element.classList.add("matched", "celebrate");
+          second.element.classList.add("matched", "celebrate");
+          
+          matchedPairs++;
+          totalMatchesCount++;
+          score += 20;
+          updateScore();
+
+          if (matchedPairs === currentPairCount) {
+            checkLevelComplete();
+          }
+
+          flippedCards = [];
+          isLocked = false;
+        }, 500);
+      } else {
+        // No match
+        setTimeout(() => {
+          first.element.classList.remove("flipped");
+          second.element.classList.remove("flipped");
+          flippedCards = [];
+          isLocked = false;
+        }, 1000);
+      }
+    }
+
+    // Check if level is complete
+    function checkLevelComplete() {
+      if (usedSDGs.length >= 17) {
+        // All SDGs completed
+        setTimeout(() => {
+          showResult();
+        }, 800);
+      } else {
+        // Show level complete and proceed to next level
+        setTimeout(() => {
+          showLevelComplete();
+        }, 800);
+      }
+    }
+
+    // Show level complete message
+    function showLevelComplete() {
+      document.getElementById("level-complete-panel").classList.remove("hidden");
+      
+      setTimeout(() => {
+        document.getElementById("level-complete-panel").classList.add("hidden");
+        nextLevel();
+      }, 2000);
+    }
+
+    // Proceed to next level
+    function nextLevel() {
+      currentLevel++;
+      matchedPairs = 0;
+      flippedCards = [];
+      isLocked = false;
+      
+      // Increase difficulty: add 1 more pair each level
+      currentPairCount = Math.min(5 + currentLevel - 1, 17 - usedSDGs.length);
+      
+      updateScore();
+      
+      currentSDGs = selectRandomSDGs(currentPairCount);
+      cards = createCards(currentSDGs);
+      renderGameBoard();
+    }
+
+    // Update score display
+    function updateScore() {
+      document.getElementById("score").textContent = score;
+      document.getElementById("matches").textContent = matchedPairs;
+      document.getElementById("total-pairs").textContent = currentPairCount;
+      document.getElementById("level").textContent = currentLevel;
+    }
+
+    // Show result
+    function showResult() {
+      document.getElementById("result-panel").classList.remove("hidden");
+      document.getElementById("final-score").textContent = score;
+      document.getElementById("student-form").classList.remove("hidden");
+      document.getElementById("submit-message").classList.add("hidden");
+      document.getElementById("submit-error").classList.add("hidden");
+    }
+
+    // Submit score to Canva Sheet
+    async function submitScore() {
+      const classNameInput = document.getElementById("class-name-input");
+      const seatNumberInput = document.getElementById("seat-number-input");
+      const studentNameInput = document.getElementById("student-name-input");
+      const submitBtn = document.getElementById("submit-score-btn");
+      const submitMessage = document.getElementById("submit-message");
+      const submitError = document.getElementById("submit-error");
+
+      const className = classNameInput.value.trim();
+      const seatNumber = seatNumberInput.value.trim();
+      const studentName = studentNameInput.value.trim();
+
+      if (!className) {
+        submitError.textContent = "❌ 請輸入班級";
+        submitError.classList.remove("hidden");
+        submitMessage.classList.add("hidden");
+        return;
+      }
+
+      if (!seatNumber) {
+        submitError.textContent = "❌ 請輸入座號";
+        submitError.classList.remove("hidden");
+        submitMessage.classList.add("hidden");
+        return;
+      }
+
+      if (!studentName) {
+        submitError.textContent = "❌ 請輸入姓名";
+        submitError.classList.remove("hidden");
+        submitMessage.classList.add("hidden");
+        return;
+      }
+
+      const gameEndTime = new Date();
+      const completionTime = gameStartTime 
+        ? Math.round((gameEndTime - gameStartTime) / 1000)
+        : 0;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "提交中...";
+
+      const result = await window.dataSdk.create({
+        class_name: className,
+        seat_number: seatNumber,
+        student_name: studentName,
+        total_score: score,
+        levels_completed: currentLevel,
+        total_matches: totalMatchesCount,
+        completion_time: completionTime + " 秒",
+        completed_at: gameEndTime.toISOString()
+      });
+
+      if (result.isOk) {
+        submitMessage.textContent = "✅ 成績已成功提交到 Canva Sheet！";
+        submitMessage.classList.remove("hidden");
+        submitError.classList.add("hidden");
+        classNameInput.disabled = true;
+        seatNumberInput.disabled = true;
+        studentNameInput.disabled = true;
+        submitBtn.textContent = "已提交";
+      } else {
+        submitError.textContent = "❌ 提交失敗，請重試";
+        submitError.classList.remove("hidden");
+        submitMessage.classList.add("hidden");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "📝 提交成績";
+      }
+    }
+
+    // Restart game
+    function restartGame() {
+      score = 0;
+      matchedPairs = 0;
+      flippedCards = [];
+      isLocked = false;
+      currentLevel = 1;
+      currentPairCount = 5;
+      usedSDGs = [];
+      gameStartTime = new Date();
+      totalMatchesCount = 0;
+
+      document.getElementById("result-panel").classList.add("hidden");
+      document.getElementById("level-complete-panel").classList.add("hidden");
+      
+      const classNameInput = document.getElementById("class-name-input");
+      const seatNumberInput = document.getElementById("seat-number-input");
+      const studentNameInput = document.getElementById("student-name-input");
+      const submitBtn = document.getElementById("submit-score-btn");
+      classNameInput.value = "";
+      seatNumberInput.value = "";
+      studentNameInput.value = "";
+      classNameInput.disabled = false;
+      seatNumberInput.disabled = false;
+      studentNameInput.disabled = false;
+      submitBtn.disabled = false;
+      submitBtn.textContent = "📝 提交成績";
+      
+      updateScore();
+
+      currentSDGs = selectRandomSDGs(currentPairCount);
+      cards = createCards(currentSDGs);
+      renderGameBoard();
+    }
+
+    // Apply config to UI
+    function applyConfig(cfg) {
+      document.getElementById("game-title").textContent = cfg.game_title || defaultConfig.game_title;
+      document.getElementById("score-label").textContent = cfg.score_label || defaultConfig.score_label;
+      
+      const app = document.getElementById("app");
+      app.style.background = `linear-gradient(135deg, ${cfg.background_color || defaultConfig.background_color} 0%, #16213e 50%, #0f3460 100%)`;
+    }
+
+    // Initialize Element SDK
+    if (window.elementSdk) {
+      window.elementSdk.init({
+        defaultConfig,
+        onConfigChange: async (newConfig) => {
+          config = { ...defaultConfig, ...newConfig };
+          applyConfig(config);
+        },
+        mapToCapabilities: (cfg) => ({
+          recolorables: [
+            {
+              get: () => cfg.background_color || defaultConfig.background_color,
+              set: (value) => {
+                cfg.background_color = value;
+                window.elementSdk.setConfig({ background_color: value });
+              }
+            },
+            {
+              get: () => cfg.card_color || defaultConfig.card_color,
+              set: (value) => {
+                cfg.card_color = value;
+                window.elementSdk.setConfig({ card_color: value });
+              }
+            },
+            {
+              get: () => cfg.text_color || defaultConfig.text_color,
+              set: (value) => {
+                cfg.text_color = value;
+                window.elementSdk.setConfig({ text_color: value });
+              }
+            },
+            {
+              get: () => cfg.accent_color || defaultConfig.accent_color,
+              set: (value) => {
+                cfg.accent_color = value;
+                window.elementSdk.setConfig({ accent_color: value });
+              }
+            },
+            {
+              get: () => cfg.button_color || defaultConfig.button_color,
+              set: (value) => {
+                cfg.button_color = value;
+                window.elementSdk.setConfig({ button_color: value });
+              }
+            }
+          ],
+          borderables: [],
+          fontEditable: undefined,
+          fontSizeable: undefined
+        }),
+        mapToEditPanelValues: (cfg) => new Map([
+          ["game_title", cfg.game_title || defaultConfig.game_title],
+          ["score_label", cfg.score_label || defaultConfig.score_label]
+        ])
+      });
+    }
+
+    // Initialize Data SDK
+    const dataHandler = {
+      onDataChanged(data) {
+        // Data is stored in Canva Sheet, no UI update needed
+      }
+    };
+
+    async function initApp() {
+      if (window.dataSdk) {
+        const result = await window.dataSdk.init(dataHandler);
+        if (!result.isOk) {
+          console.error("Failed to initialize data SDK");
+        }
+      }
+      restartGame();
+    }
+
+    // Start game on load
+    initApp();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9bea212e70c44a88',t:'MTc2ODUyOTk4NC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
